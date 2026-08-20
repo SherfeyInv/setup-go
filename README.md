@@ -3,68 +3,102 @@
 [![Basic validation](https://github.com/actions/setup-go/actions/workflows/basic-validation.yml/badge.svg)](https://github.com/actions/setup-go/actions/workflows/basic-validation.yml)
 [![Validate 'setup-go'](https://github.com/actions/setup-go/actions/workflows/versions.yml/badge.svg)](https://github.com/actions/setup-go/actions/workflows/versions.yml)
 
-This action sets up a go environment for use in actions by:
+This action sets up a Go environment for use in GitHub Actions by:
 
-- Optionally downloading and caching a version of Go by version and adding to `PATH`.
-- Registering problem matchers for error output.
+- Optionally downloading and caching a version of Go by version and adding it to the PATH
+- Optionally caching Go modules and build outputs
+- Registering problem matchers for error output
 
-# V5
 
-The V5 edition of the action offers:
+## What's new in V7
 
-- Upgraded Node.js runtime from node16 to node20
+The V7 edition of the action includes:
+- Migrated action internals to ESM for compatibility with latest `@actions/*` packages. No changes to action inputs, outputs, or behavior.
+
+## Breaking changes in V6
+
+The V6 edition of the action includes:
+- **Upgraded Node.js runtime from node20 to node24**
+  > Make sure your runner is on version v2.327.1 or later to ensure compatibility with this release. See [Release Notes](https://github.com/actions/runner/releases/tag/v2.327.1)
+
+- **Go toolchain**
+  - Supports both `go` and `toolchain` directives in `go.mod`. If the `toolchain` directive is present, its version is used; otherwise, the action falls back to the `go` directive.
+
+- **Cache key update**
+  - By default, the cache key for Go modules is based on `go.mod`. To use `go.sum`, configure the `cache-dependency-path` input.
 
 See full release notes on the [releases page](https://github.com/actions/setup-go/releases).
 
-# V4
+## Usage
 
-The V4 edition of the action offers:
+See [action.yml](action.yml).
 
- - Enabled caching by default
+<!-- start usage -->
+```yaml
+- uses: actions/setup-go@v7
+  with:
+    # Version or version range of Go to use
+    go-version: '1.23'
+    
+    # Path to go.mod, go.work, .go-version, or .tool-versions file
+    # Note: if both go-version and go-version-file are provided, go-version takes precedence.
+    go-version-file: 'go.mod'
+    
+    # Set this option if you want the action to check for the latest available version
+    # Default: false
+    check-latest: false
+    
+    # GitHub token for authentication
+    token: ${{ github.token }}
+    
+    # Used to specify whether caching is needed.
+    # Default: true
+    cache: true
+    
+    # Path to dependency files for caching
+    cache-dependency-path: 'go.sum'
+    
+    # Architecture to install (auto-detected if not specified)
+    architecture: 'x64'
+    
+    # Custom base URL for Go downloads (e.g., for mirrors)
+    go-download-base-url: ''
+```
+<!-- end usage -->
 
-The action will try to enable caching unless the `cache` input is explicitly set to false.
-
-Please see "[Caching dependency files and build outputs](https://github.com/actions/setup-go#caching-dependency-files-and-build-outputs)" for more information.
-
-# V3
-
-The V3 edition of the action offers:
-
-- Adds `GOBIN` to the `PATH`
-- Proxy support
-- Check latest version
-- Caching packages dependencies
-- stable and oldstable aliases
-- Bug Fixes (including issues around version matching and semver)
-
-The action will first check the local cache for a version match. If a version is not found locally, it will pull it from
-the `main` branch of the [go-versions](https://github.com/actions/go-versions/blob/main/versions-manifest.json)
-repository. On miss or failure, it will fall back to downloading directly
-from [go dist](https://storage.googleapis.com/golang). To change the default behavior, please use
-the [check-latest input](#check-latest-version).
-
-**Note:** The `setup-go` action uses executable binaries which are built by Golang side. The action does not build
-golang from source code.
-
-Matching by [semver spec](https://github.com/npm/node-semver):
+**Basic:**
 
 ```yaml
 steps:
-  - uses: actions/checkout@v4
-  - uses: actions/setup-go@v5
+  - uses: actions/checkout@v7
+  - uses: actions/setup-go@v7
     with:
-      go-version: '^1.13.1' # The Go version to download (if necessary) and use.
-  - run: go version
+      go-version: '1.25' # The Go version to download (if necessary) and use.
+  - run: go run hello.go
 ```
 
-```yaml
-steps:
-  - uses: actions/checkout@v4
-  - uses: actions/setup-go@v5
-    with:
-      go-version: '>=1.17.0'
-  - run: go version
-```
+**Version resolution behavior:**
+
+The action resolves the requested version in the following order:
+1. **Local cache** - Checks the local tool cache for a matching [semver](https://github.com/npm/node-semver#versions) version.
+2. **go-versions repository** - If the requested version isn’t available in the tool cache, it pulls the version manifest from the `main` branch of the [go-versions repository](https://github.com/actions/go-versions/blob/main/versions-manifest.json).
+3. **Direct download** - If that lookup misses or fails, it will fall back to downloading directly from the [official Go distribution site](https://go.dev/dl).
+
+To change the default behavior, please use
+the [check-latest input](docs/advanced-usage.md#check-latest-version).
+
+> **Note**: The `setup-go` action uses executable binaries built by the Go team and does not build Go binaries from source code.
+
+## Supported version syntax
+
+The `go-version` input supports the following syntax:
+
+- Specific versions: `1.25`, `1.24.11`, `1.24.0-rc.1`, `1.23.0-beta.1`
+- SemVer version range syntax: `^1.25.1`, `~1.24.1`, `>=1.25.0-rc.1`, `<1.25.0`, `>=1.22.0 <1.24.0`
+- Aliases: `stable`, `oldstable`
+- Wildcards: `1.25.x`, `1.x`
+
+For details on Semantic Versioning, see [the semver package documentation](https://github.com/npm/node-semver).
 
 > **Note**: Due to the peculiarities of YAML parsing, it is recommended to wrap the version in single quotation marks:
 >
@@ -72,208 +106,49 @@ steps:
 >   go-version: '1.20'
 > ```
 >
-> The recommendation is based on the YAML parser's behavior, which interprets non-wrapped values as numbers and, in the case of version 1.20, trims it down to 1.2, which may not be very obvious.
+> The recommendation is based on the YAML parser's behavior, which interprets non-wrapped values as numbers and, in the case of version `1.20`, trims it down to `1.2`, which may not be very obvious.
 
-Matching an unstable pre-release:
+For more usage examples, please refer to the section: [Using go-version input](docs/advanced-usage.md#using-the-go-version-input) of the [Advanced usage](docs/advanced-usage.md) guide.
+
+## Recommended permissions
+
+When using the `setup-go` action in your GitHub Actions workflow, it is recommended to set the following permissions to ensure proper functionality:
 
 ```yaml
-steps:
-  - uses: actions/checkout@v4
-  - uses: actions/setup-go@v5
-    with:
-      go-version: '1.18.0-rc.1' # The Go version to download (if necessary) and use.
-  - run: go version
+permissions:
+  contents: read # access to check out code and install dependencies
 ```
 
-```yaml
-steps:
-  - uses: actions/checkout@v4
-  - uses: actions/setup-go@v5
-    with:
-      go-version: '1.16.0-beta.1' # The Go version to download (if necessary) and use.
-  - run: go version
-```
+## Caching dependency files and build outputs
 
-# Usage
+The action includes built-in caching and restoration for Go modules and build outputs. It uses
+[toolkit/cache](https://github.com/actions/toolkit/tree/main/packages/cache) under the hood, but requires less configuration.
+The `cache` input is optional, and caching is enabled by default. To disable caching, set `cache: false`.
 
-See [action.yml](action.yml)
+By default, the action looks for `go.mod` in the repository root and uses its hash as part of the cache key. Use the `cache-dependency-path` input when you have multiple dependency files, or when they’re located in different subdirectories. This input supports glob patterns.
 
-## Basic
+If caching cannot be performed for any reason, the action logs a warning and continues workflow execution.
 
-```yaml
-steps:
-  - uses: actions/checkout@v4
-  - uses: actions/setup-go@v5
-    with:
-      go-version: '1.16.1' # The Go version to download (if necessary) and use.
-  - run: go run hello.go
-```
+For examples of using `cache-dependency-path`, see the [Caching](docs/advanced-usage.md#caching) section of the [Advanced usage](docs/advanced-usage.md) guide.
 
-## Check latest version
 
-The `check-latest` flag defaults to `false`. Use the default or set `check-latest` to `false` if you prefer stability
-and if you want to ensure a specific Go version is always used.
+## Advanced usage
 
-If `check-latest` is set to `true`, the action first checks if the cached version is the latest one. If the locally
-cached version is not the most up-to-date, a Go version will then be downloaded. Set `check-latest` to `true` if you
-want the most up-to-date Go version to always be used.
+- [Using the go-version input](docs/advanced-usage.md#using-the-go-version-input)
+- [Using the go-version-file input](docs/advanced-usage.md#using-the-go-version-file-input)
+- [Check latest version](docs/advanced-usage.md#check-latest-version)
+- [Caching](docs/advanced-usage.md#caching)
+- [Outputs](docs/advanced-usage.md#outputs)
+- [Custom download URL](docs/advanced-usage.md#custom-download-url)
+- [Using `setup-go` on GHES](docs/advanced-usage.md#using-setup-go-on-ghes)
 
-> Setting `check-latest` to `true` has performance implications as downloading Go versions is slower than using cached
-> versions.
+## License
 
-```yaml
-steps:
-  - uses: actions/checkout@v4
-  - uses: actions/setup-go@v5
-    with:
-      go-version: '1.14'
-      check-latest: true
-  - run: go run hello.go
-```
+The scripts and documentation in this project are released under the [MIT License](LICENSE).
 
-## Using stable/oldstable aliases
+## Contributions
 
-If `stable` is provided, action will get the latest stable version from
-the [`go-versions`](https://github.com/actions/go-versions/blob/main/versions-manifest.json) repository manifest.
-
-If `oldstable` is provided, when current release is 1.19.x, action will resolve version as 1.18.x, where x is the latest
-patch release.
-
-**Note:** using these aliases will result in same version as using corresponding minor release with `check-latest` input
-set to `true`
-
-```yaml
-steps:
-  - uses: actions/checkout@v4
-  - uses: actions/setup-go@v5
-    with:
-      go-version: 'stable'
-  - run: go run hello.go
-```
-
-```yaml
-steps:
-  - uses: actions/checkout@v4
-  - uses: actions/setup-go@v5
-    with:
-      go-version: 'oldstable'
-  - run: go run hello.go
-```
-
-## Caching dependency files and build outputs:
-
-The action has a built-in functionality for caching and restoring go modules and build outputs. It
-uses [toolkit/cache](https://github.com/actions/toolkit/tree/main/packages/cache) under the hood but requires less configuration settings.
-The `cache` input is optional, and caching is turned on by default.
-
-The action defaults to search for the dependency file - go.sum in the repository root, and uses its hash as a part of
-the cache key. Use `cache-dependency-path` input for cases when multiple dependency files are used, or they are located
-in different subdirectories. The input supports glob patterns.
-
-If some problem that prevents success caching happens then the action issues the warning in the log and continues the execution of the pipeline.
-
-**Caching in monorepos**
-
-```yaml
-steps:
-  - uses: actions/checkout@v4
-  - uses: actions/setup-go@v5
-    with:
-      go-version: '1.17'
-      check-latest: true
-      cache-dependency-path: |
-             subdir/go.sum
-             tools/go.sum
-    # cache-dependency-path: "**/*.sum"
-
-  - run: go run hello.go
-  ```
-
-## Getting go version from the go.mod file
-
-The `go-version-file` input accepts a path to a `go.mod` file or a `go.work` file that contains the version of Go to be used by a project.
-
-The `go` directive in `go.mod` can specify a patch version or omit it altogether (e.g., `go 1.22.0` or `go 1.22`).  
-If a patch version is specified, that specific patch version will be used.  
-If no patch version is specified, it will search for the latest available patch version in the cache,
-[versions-manifest.json](https://github.com/actions/go-versions/blob/main/versions-manifest.json), and the
-[official Go language website](https://golang.org/dl/?mode=json&include=all), in that order.
-
-If both the `go-version` and the `go-version-file` inputs are provided then the `go-version` input is used.
-> The action will search for the `go.mod` file relative to the repository root
-
-```yaml
-steps:
-  - uses: actions/checkout@v4
-  - uses: actions/setup-go@v5
-    with:
-      go-version-file: 'path/to/go.mod'
-  - run: go version
-```
-
-## Matrix testing
-
-```yaml
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        go: [ '1.14', '1.13' ]
-    name: Go ${{ matrix.go }} sample
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ matrix.go }}
-      - run: go run hello.go
-```
-
-### Supported version syntax
-
-The `go-version` input supports the following syntax:
-
-- Specific versions: `1.15`, `1.16.1`, `1.17.0-rc.2`, `1.16.0-beta.1`
-- SemVer's version range syntax: `^1.13.1`, `>=1.18.0-rc.1`
-
-For more information about semantic versioning, please refer to [semver](https://github.com/npm/node-semver)
-documentation.
-
-## Using `setup-go` on GHES
-
-`setup-go` comes pre-installed on the appliance with GHES if Actions is enabled. When dynamically downloading Go
-distributions, `setup-go` downloads distributions from [`actions/go-versions`](https://github.com/actions/go-versions)
-on github.com (outside of the appliance). These calls to `actions/go-versions` are made via unauthenticated requests,
-which are limited
-to [60 requests per hour per IP](https://docs.github.com/en/rest/overview/resources-in-the-rest-api#rate-limiting). If
-more requests are made within the time frame, then you will start to see rate-limit errors during downloading that looks
-like: `##[error]API rate limit exceeded for...`. After that error the action will try to download versions directly
-from https://storage.googleapis.com/golang, but it also can have rate limit so it's better to put token.
-
-To get a higher rate limit, you
-can [generate a personal access token on github.com](https://github.com/settings/tokens/new) and pass it as the `token`
-input for the action:
-
-```yaml
-uses: actions/setup-go@v5
-with:
-  token: ${{ secrets.GH_DOTCOM_TOKEN }}
-  go-version: '1.18'
-```
-
-If the runner is not able to access github.com, any Go versions requested during a workflow run must come from the
-runner's tool cache.
-See "[Setting up the tool cache on self-hosted runners without internet access](https://docs.github.com/en/enterprise-server@3.2/admin/github-actions/managing-access-to-actions-from-githubcom/setting-up-the-tool-cache-on-self-hosted-runners-without-internet-access)"
-for more information.
-
-# License
-
-The scripts and documentation in this project are released under the [MIT License](LICENSE)
-
-# Contributions
-
-Contributions are welcome! See [Contributor's Guide](docs/contributors.md)
+Contributions are welcome! See our [Contributor's Guide](docs/contributors.md).
 
 ## Code of Conduct
 
