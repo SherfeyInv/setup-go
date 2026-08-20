@@ -4,9 +4,9 @@ import * as glob from '@actions/glob';
 import path from 'path';
 import fs from 'fs';
 
-import {State, Outputs} from './constants';
-import {PackageManagerInfo} from './package-managers';
-import {getCacheDirectoryPath, getPackageManagerInfo} from './cache-utils';
+import {State, Outputs} from './constants.js';
+import {PackageManagerInfo} from './package-managers.js';
+import {getCacheDirectoryPath, getPackageManagerInfo} from './cache-utils.js';
 
 export const restoreCache = async (
   versionSpec: string,
@@ -15,6 +15,7 @@ export const restoreCache = async (
 ) => {
   const packageManagerInfo = await getPackageManagerInfo(packageManager);
   const platform = process.env.RUNNER_OS;
+  const arch = process.arch;
 
   const cachePaths = await getCacheDirectoryPath(packageManagerInfo);
 
@@ -31,7 +32,7 @@ export const restoreCache = async (
 
   const linuxVersion =
     process.env.RUNNER_OS === 'Linux' ? `${process.env.ImageOS}-` : '';
-  const primaryKey = `setup-go-${platform}-${linuxVersion}go-${versionSpec}-${fileHash}`;
+  const primaryKey = `setup-go-${platform}-${arch}-${linuxVersion}go-${versionSpec}-${fileHash}`;
   core.debug(`primary key is ${primaryKey}`);
 
   core.saveState(State.CachePrimaryKey, primaryKey);
@@ -54,8 +55,8 @@ const findDependencyFile = (packageManager: PackageManagerInfo) => {
   const workspace = process.env.GITHUB_WORKSPACE!;
   const rootContent = fs.readdirSync(workspace);
 
-  const goSumFileExists = rootContent.includes(dependencyFile);
-  if (!goSumFileExists) {
+  const goModFileExists = rootContent.includes(dependencyFile);
+  if (!goModFileExists) {
     throw new Error(
       `Dependencies file is not found in ${workspace}. Supported file pattern: ${dependencyFile}`
     );
